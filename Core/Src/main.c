@@ -77,7 +77,7 @@ void WriteConfig() {
 	// Будьте уверены, что размер структуры настроек кратен 2 байтам
 	for (int i = 0; i < sizeof(lss); i += 2) { // Запись всех настроек
 		stat = HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD,
-				SETTINGS_ADDRESS + i, *(data++));
+		SETTINGS_ADDRESS + i, *(data++));
 		if (stat != HAL_OK)
 			break; // Если что-то пошло не так - выскочить из цикла
 	}
@@ -96,6 +96,14 @@ void ReadConfig() {
 		setData[1] = (uint8_t) ((tempData & 0x00ff0000) >> 16); // Извлечь второй байт из слова
 		setData[2] = (uint8_t) ((tempData & 0x0000ff00) >> 8); // Излечь третий байт из слова
 		setData[3] = tempData & 0xff; // Извлечь четвертый байт из слова
+	}
+}
+//проверка, пора ли менять состояние линии
+void CheckLineState(uint32_t now_time, uint32_t *check_time,
+		uint16_t L_interval, uint16_t L_pin) {
+	if (now_time - *check_time >= L_interval) { //если пора
+		HAL_GPIO_TogglePin(GPIOB, L_pin); //сменили состояние
+		*check_time = now_time; //запомнили время
 	}
 }
 /* USER CODE END 0 */
@@ -135,12 +143,17 @@ int main(void) {
 	MX_USART1_UART_Init();
 	/* USER CODE BEGIN 2 */
 	uint32_t i_tick = 0; //счетчик прохождения main while
+	//счетчики для линий
+	uint32_t i_L0 = 0;
+	uint32_t i_L1 = 0;
 	/* USER CODE END 2 */
 
 	/* Infinite loop */
 	/* USER CODE BEGIN WHILE */
 	while (1) {
 		i_tick++;
+		CheckLineState(i_tick, &i_L0, lss.L0_interval, L0_Pin);
+		CheckLineState(i_tick, &i_L1, lss.L1_interval, L1_Pin);
 		/* USER CODE END WHILE */
 
 		/* USER CODE BEGIN 3 */
