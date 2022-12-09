@@ -21,7 +21,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -59,8 +60,8 @@ static void MX_USART1_UART_Init(void);
 #define L0_interval_def 100
 #define L1_interval_def 200
 struct lines_settings {
-	uint16_t L0_interval;
-	uint16_t L1_interval;
+	unsigned int L0_interval;
+	unsigned int L1_interval;
 };
 struct lines_settings lss;
 void WriteConfig() {
@@ -92,10 +93,10 @@ void ReadConfig() {
 	uint8_t *setData = (uint8_t*) &lss;
 	uint32_t tempData = FlashRead(SETTINGS_ADDRESS); // Прочесть слово из флешки
 	if (tempData != 0xffffffff) { // Если флешка не пустая
-		setData[0] = (uint8_t) ((tempData & 0xff000000) >> 24); // Извлечь первый байт из слова
-		setData[1] = (uint8_t) ((tempData & 0x00ff0000) >> 16); // Извлечь второй байт из слова
-		setData[2] = (uint8_t) ((tempData & 0x0000ff00) >> 8); // Излечь третий байт из слова
-		setData[3] = tempData & 0xff; // Извлечь четвертый байт из слова
+		setData[0] = (uint8_t) ((tempData & 0xff000000) >> 24); // �?звлечь первый байт из слова
+		setData[1] = (uint8_t) ((tempData & 0x00ff0000) >> 16); // �?звлечь второй байт из слова
+		setData[2] = (uint8_t) ((tempData & 0x0000ff00) >> 8); // �?злечь третий байт из слова
+		setData[3] = tempData & 0xff; // �?звлечь четвертый байт из слова
 	}
 }
 //проверка, пора ли менять состояние линии
@@ -104,6 +105,48 @@ void CheckLineState(uint32_t now_time, uint32_t *check_time,
 	if (now_time - *check_time >= L_interval) { //если пора
 		HAL_GPIO_TogglePin(GPIOB, L_pin); //сменили состояние
 		*check_time = now_time; //запомнили время
+	}
+}
+char* S_Parser(char *string) {
+	static char *source = NULL;
+	char *p, *next_data = 0;
+	if (string != NULL) {
+		source = string;
+	}
+	if (source == NULL) {
+		return NULL;
+	}
+	if ((p = strpbrk(source, ",")) != NULL) {
+		*p = 0;
+		next_data = source;
+		source = ++p;
+	}
+	return next_data;
+}
+//формат: SET,100,200,END\n
+//где 100-интервал для первой линии, 200-второй
+#define SIZE_BF_SET 17 //размер команды настройки
+char SET_data[SIZE_BF_SET] = { 0 };
+const char str_SET_data[4] = "SET";
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+	if (huart == &huart1) {
+		char *pstr = strstr(SET_data, str_SET_data);  //Поиск строки
+		char *istr = S_Parser(pstr);  //Парсим значения из SET
+		uint8_t i_d_SET = 0;
+		while (istr != NULL)  // Выделение последующих частей
+		{
+			switch (i_d_SET) {
+			case 1:
+				sscanf(istr, "%3d", &lss.L0_interval);
+				break;
+			case 2:
+				sscanf(istr, "%3d", &lss.L1_interval);
+				break;
+			}
+			istr = S_Parser(NULL);  // Выделение очередной части строки
+			i_d_SET++;
+		}
+		WriteConfig(); //сохраняем
 	}
 }
 /* USER CODE END 0 */
@@ -115,7 +158,7 @@ void CheckLineState(uint32_t now_time, uint32_t *check_time,
 int main(void) {
 	/* USER CODE BEGIN 1 */
 	ReadConfig();
-	if (!lss.L0_interval || !lss.L1_interval) { //если один из интервалов == 0, заменяем преднастройкой
+	if (!lss.L0_interval || !lss.L1_interval) { //если хотя бы один из интервалов == 0, заменяем преднастройкой
 		lss.L0_interval = L0_interval_def;
 		lss.L1_interval = L1_interval_def;
 		WriteConfig(); //сохраняем
